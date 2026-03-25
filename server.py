@@ -128,7 +128,7 @@ async def main():
     
     logging.info(f'🔄️  Starting server on port: {WEBSOCKET_PORT}')
     try:
-        server = await websockets.serve(handle_client, RPI_IP, WEBSOCKET_PORT)
+        server = await websockets.serve(handle_client, "0.0.0.0", WEBSOCKET_PORT)
         logging.info(f'🔗  Server connected')
         logging.info(f'🌐  Connect from web browser')
     except:
