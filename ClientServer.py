@@ -18,7 +18,7 @@ async def serve_client(websocket):
         while True:
             try:
                 await websocket.send(json.dumps({"type": "cpu_temp", "data": get_cpu_temp()}))
-                await websocket.send(json.dumps({"type": "cpu_use", "data": psutil.cpu_percent(interval=1)}))
+                await websocket.send(json.dumps({"type": "cpu_use", "data": psutil.cpu_percent(interval=None)}))
                 await websocket.send(json.dumps({"type": "store_use", "data": shutil.disk_usage('/')[1]}))
             except (ConnectionClosedOK, ConnectionClosedError, ConnectionClosed):
                 break

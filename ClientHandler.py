@@ -20,6 +20,10 @@ def get_capture_ls():
     return os.listdir('./captures')
 
 
+# def get_thumbnail_ls():
+#     pass
+
+
 async def handle_client(websocket):
     logging.basicConfig(level=logging.INFO)
 
@@ -37,6 +41,7 @@ async def handle_client(websocket):
             try:
                 data = json.loads(message)
                 msg_type = data.get('type', 'unknown')
+                # payload = data.get('data', 'unknown')
 
                 if msg_type == 'offer':
                     logging.info("🎬 Processing offer...")
@@ -116,10 +121,16 @@ async def handle_client(websocket):
                     except Exception as e:
                         logging.error(f"❌ ICE candidate error: {e}")
 
+                # elif msg_type == 'file-req':
+                #     if payload == 'all':
+                #         
+                #     pass
+
                 elif msg_type == 'test':
                     print(data.get('data', 'unknown'))
                     if(data.get('data', 'unknown')) == 'ping':
                         await websocket.send(json.dumps({"type": "test", "data": "pong"}))
+
             except json.JSONDecodeError:
                 logging.error('❌ Invalid JSON received')
     except (ConnectionClosedOK, ConnectionClosedError, ConnectionClosed):
