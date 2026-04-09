@@ -9,11 +9,15 @@ import sys
 import asyncio
 import numpy as np
 
-logger = logging.getLogger("pi-streamer")
+
+# ls -l /dev/snd/by-id
+MICROPHONE_NAME = 'usb-KTMicro_KT_USB_Audio_2021-07-19-0000-0000-0000--00'
+
+logger = logging.getLogger("microphone")
 
 # Audio settings
 AUDIO_SAMPLE_RATE = 48000
-AUDIO_CHUNK = 960 # 20ms at 48kHz
+AUDIO_CHUNK = 960  # 20ms at 48kHz
 AUDIO_CHANNELS = 1
 
 
@@ -33,6 +37,7 @@ def suppress_alsa_stderr():
 class MicrophoneStreamTrack(MediaStreamTrack):
     kind = "audio"
 
+
     def __init__(self):
         super().__init__()
         self.sample_rate = AUDIO_SAMPLE_RATE
@@ -41,21 +46,22 @@ class MicrophoneStreamTrack(MediaStreamTrack):
         self.pts = 0
         self.time_base = fractions.Fraction(1, self.sample_rate)
 
-        self.p = None
+        self.pa = None
         self.stream = None
         self.running = True
         self._init_audio()
 
+
     def _init_audio(self):
         try:
             with suppress_alsa_stderr():
-                self.p = pyaudio.PyAudio()
+                self.pa = pyaudio.PyAudio()
 
             input_device = self._find_input_device()
 
             if input_device is not None:
                 with suppress_alsa_stderr():
-                    self.stream = self.p.open(
+                    self.stream = self.pa.open(
                     format=pyaudio.paInt16,
                     channels=self.channels,
                     rate=self.sample_rate,
@@ -72,41 +78,48 @@ class MicrophoneStreamTrack(MediaStreamTrack):
             logger.error(f"❌ Audio input failed: {e}")
             self.stream = None
 
+
     def _find_input_device(self):
-        if not self.p:
+        if not self.pa:
             return None
 
         try:
-            for i in range(self.p.get_device_count()):
+            for i in range(self.pa.get_device_count()):
                 try:
                     with suppress_alsa_stderr():
-                        device_info = self.p.get_device_info_by_index(i)
+                        device_info = self.pa.get_device_info_by_index(i)
 
                     if device_info.get('maxInputChannels', 0) > 0:
                         device_name = device_info.get('name', 'Unknown')
-                        logger.info(f"Testing input device {i}: {device_name}")
+                        if "KT" in device_name:
+                            logger.info(f"Testing input device {i}: {device_name}")
 
-                    try:
-                        with suppress_alsa_stderr():
-                            test_stream = self.p.open(
-                            format=pyaudio.paInt16,
-                            channels=self.channels,
-                            rate=self.sample_rate,
-                            input=True,
-                            input_device_index=i,
-                            frames_per_buffer=self.chunk
-                            )
-                        test_stream.close()
-                        logger.info(f"✅ Device {i} works: {device_name}")
-                        return i
-                    except:
-                        continue
+                            try:
+                                with suppress_alsa_stderr():
+                                    test_stream = self.pa.open(
+                                    format=pyaudio.paInt16,
+                                    channels=self.channels,
+                                    rate=self.sample_rate,
+                                    input=True,
+                                    input_device_index=i,
+                                    frames_per_buffer=self.chunk
+                                    )
+                                test_stream.close()
+                                logger.info(f"✅ Device {i} works: {device_name}")
+                                return i
+                            except:
+                                continue
                 except:
                     continue
         except Exception as e:
             logger.error(f"Error finding input device: {e}")
 
         return None
+    
+
+    def _reconnect(self):
+        self._init_audio()
+
 
     async def recv(self):
         if not self.running:
@@ -139,6 +152,7 @@ class MicrophoneStreamTrack(MediaStreamTrack):
             frame.time_base = self.time_base
             self.pts += self.chunk
             return frame
+
 
     def stop(self):
         self.running = False

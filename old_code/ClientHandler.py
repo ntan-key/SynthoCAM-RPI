@@ -8,10 +8,10 @@ import websockets
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError, ConnectionClosed
 
 
-from Camera import CameraStreamTrack
-from Microphone import MicrophoneStreamTrack
+from old_code.Camera import CameraStreamTrack
+from old_code.Microphone import MicrophoneStreamTrack
 
-from ClientServer import serve_client
+from old_code.ClientServer import serve_client
 
 import os
 
