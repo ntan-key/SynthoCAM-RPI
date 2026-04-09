@@ -10,7 +10,7 @@ from aiortc import MediaStreamTrack
 from av.audio.frame import AudioFrame
 from collections import deque
 
-import state
+import State
 
 
 # ls -l /dev/snd/by-id
@@ -72,7 +72,7 @@ class MicrophoneTrack(MediaStreamTrack):
         while True:
             _prev_connected = self.connected
             self.connected = self._status()
-            state.microphone_connected = self.connected
+            State.microphone_connected = self.connected
             if (_prev_connected != self.connected):
                 logger.info(f'microphone {'connected' if self.connected else 'disconnected'}')
                 if self.connected:
