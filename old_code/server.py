@@ -1,7 +1,7 @@
 
-import asyncio
 import os
 import sys
+import asyncio
 import contextlib
 import logging
 
@@ -9,8 +9,9 @@ import cv2
 import pyaudio
 
 import websockets
+from fastapi import FastAPI
 
-from ClientHandler import handle_client
+from ClientHandler2 import handle_client
 
 
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +23,9 @@ MICROPHONE_NAME = 'usb-KTMicro_KT_USB_Audio_2021-07-19-0000-0000-0000--00'
 
 RPI_IP = '192.168.0.131'
 WEBSOCKET_PORT = 5927
+
+app = FastAPI()
+
 
 @contextlib.contextmanager
 def suppress_alsa_stderr():
@@ -128,20 +132,21 @@ async def main():
     
     logging.info(f'🔄️  Starting server on port: {WEBSOCKET_PORT}')
     try:
-        server = await websockets.serve(handle_client, "0.0.0.0", WEBSOCKET_PORT)
+        handle_client(app)
+        # server = await websockets.serve(handle_client, "0.0.0.0", WEBSOCKET_PORT)
         logging.info(f'🔗  Server connected')
         logging.info(f'🌐  Connect from web browser')
     except:
         logging.warning(f'⚠️  Server could not start')
     print('-' * 55)
 
-    try:
-        await server.wait_closed()
-    except asyncio.CancelledError:
-        logging.info(f'🔄️  Server shutting down')
-        server.close()
-        await server.wait_closed()
-        logging.info(f'⛓️‍💥  Server disconnected')
+    # try:
+    #     await server.wait_closed()
+    # except asyncio.CancelledError:
+    #     logging.info(f'🔄️  Server shutting down')
+    #     server.close()
+    #     await server.wait_closed()
+    #     logging.info(f'⛓️‍💥  Server disconnected')
     
 
 if __name__ == "__main__":

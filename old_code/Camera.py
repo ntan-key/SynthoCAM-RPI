@@ -4,20 +4,24 @@ import logging
 import numpy as np
 import asyncio
 from av import VideoFrame
+from queue import Queue
 
+
+# ls -l /dev/v4l/by-id
+CAMERA_NAME = 'usb-MACROSILICON_AV_TO_USB2.0_20150130-video-index0'
 
 # Configuration
 CAMERA_DEVICE = 0 # Change if your camera is on different device
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
 CAMERA_FPS = 30
-WEBSOCKET_PORT = 8765
 
+video_frame_queue = Queue(maxsize=10)
 
 # global recording
 # recording = False
 
-logger = logging.getLogger("pi-streamer")
+logger = logging.getLogger("camera")
 
 # try:
 #     fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -29,11 +33,13 @@ logger = logging.getLogger("pi-streamer")
 class CameraStreamTrack(VideoStreamTrack):
     kind = "video"
     
+
     def __init__(self):
         super().__init__()
         self.cap = None
         self.frame_count = 0
         self._init_camera()
+
 
     def _init_camera(self):
         try:
@@ -44,13 +50,14 @@ class CameraStreamTrack(VideoStreamTrack):
                 self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
                 self.cap.set(cv2.CAP_PROP_FPS, CAMERA_FPS)
                 self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                logging.info("✅ Camera ready")
+                logger.info("✅ Camera ready")
             else:
-                logging.warning("⚠️ Camera not available, using test pattern")
+                logger.warning("⚠️ Camera not available, using test pattern")
                 self.cap = None
         except Exception as e:
-            logging.error(f"Camera error: {e}")
+            logger.error(f"Camera error: {e}")
             self.cap = None
+
 
     async def recv(self):
         pts, time_base = await self.next_timestamp()
@@ -69,12 +76,14 @@ class CameraStreamTrack(VideoStreamTrack):
                 frame = self._test_pattern()
         else:
             frame = self._test_pattern()
-
         video_frame = VideoFrame.from_ndarray(frame, format="rgb24")
         video_frame.pts = pts
         video_frame.time_base = time_base
 
+        # print(f"PTS: {pts}, queue size: {self._queue.qsize()}")
+
         return video_frame
+
 
     def _test_pattern(self):
         """Generate test pattern if camera fails"""
@@ -98,7 +107,8 @@ class CameraStreamTrack(VideoStreamTrack):
 
         return frame
 
+
     def stop(self):
         if self.cap:
             self.cap.release()
-            logging.info("📹 Camera released")
+            logger.info("📹 Camera released")
