@@ -59,7 +59,7 @@ class MicrophoneTrack(MediaStreamTrack):
         # stream
         self.stream = None
         self.pts = 0
-        self._stream_queue = asyncio.Queue(maxsize=50)
+        self._stream_queue = asyncio.Queue(maxsize=1)
         self.loop = asyncio.get_running_loop()
         
 
@@ -130,7 +130,8 @@ class MicrophoneTrack(MediaStreamTrack):
     def _stop_stream(self):
         if self.stream:
             try:
-                self.stream.stop()   
+                if self.stream.active:
+                    self.stream.stop()   
                 self.stream.close()
                 logger.info("stream stopped")
             except:
@@ -144,13 +145,26 @@ class MicrophoneTrack(MediaStreamTrack):
             logger.info(f'stream status: {status}')
         try:
             self.loop.call_soon_threadsafe(
-                self._stream_queue.put,
+                self._safe_put,
                 indata.copy()
             )
             # await self._stream_queue.put(indata.copy())
         except asyncio.QueueFull:
             logger.info('queue full')
             pass
+
+    def _safe_put(self, data):
+        try:
+            self._stream_queue.put_nowait(data)
+        except asyncio.QueueFull:
+            try:
+                self._stream_queue.get_nowait()  # drop oldest audio frame
+            except asyncio.QueueEmpty:
+                logger.info('queue full exception, but queue empty')
+            try:
+                self._stream_queue.put_nowait(data)
+            except asyncio.QueueFull:
+                logger.info('queue full again')
     
 
     async def recv(self):
