@@ -77,7 +77,7 @@ class CameraTrack(VideoStreamTrack):
             # print(_prev_connected, self.connected, self.streaming)
             if (self.connected and not self.streaming):
                 self._stop_stream()
-                await asyncio.sleep(1)
+                await asyncio.sleep(2)
                 self._start_stream()
             await asyncio.sleep(5)
 
