@@ -5,7 +5,7 @@ import shutil
 from fastapi import WebSocket
 import asyncio
 import logging
-import state  # global variables
+import State  # global variables
 
 
 def get_capture_ls(capture_folder):

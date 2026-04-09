@@ -13,7 +13,7 @@ from old_code.Microphone import MicrophoneStreamTrack
 from MicrophoneTrack import MicrophoneTrack
 from CameraTrack import CameraTrack
 from MediaManager import MediaManager
-import state
+import State
 from pydantic import BaseModel
 
 
@@ -92,13 +92,13 @@ async def ws_endpoint(ws: WebSocket):
             elif data['type'] == "recording-start":
                 video_filename = data['filename']
                 logger.info(f'recording to file: {video_filename}')
-                state.record = True
+                State.record = True
                 if pc and camera_track and audio_track:
                     camera_track.start_record(os.path.join(CAPTURE_FOLDER, video_filename))
                 
             elif data['type'] == "recording-end":
                 logger.info('recording ended')
-                state.record = False
+                State.record = False
                 if pc and camera_track and audio_track:
                     camera_track.stop_record()
                     while camera_track.saving:

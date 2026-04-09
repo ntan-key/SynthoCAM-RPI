@@ -10,7 +10,7 @@ import queue
 from collections import deque
 import time
 
-import state
+import State
 
 
 # ls -l /dev/v4l/by-id
@@ -65,18 +65,19 @@ class CameraTrack(VideoStreamTrack):
         while True:
             _prev_connected = self.connected
             self.connected = self._status()
-            state.camera_connected = self.connected
+            State.camera_connected = self.connected
             if (_prev_connected != self.connected):
                 logger.info(f'camera {'connected' if self.connected else 'disconnected'}')
                 if self.connected:
                     await asyncio.sleep(2)
                     self._start_stream()
                 else:
+                    await asyncio.sleep(2)
                     self._stop_stream()
             # print(_prev_connected, self.connected, self.streaming)
             if (self.connected and not self.streaming):
                 self._stop_stream()
-                time.sleep(0.2)
+                await asyncio.sleep(1)
                 self._start_stream()
             await asyncio.sleep(5)
 
@@ -114,15 +115,15 @@ class CameraTrack(VideoStreamTrack):
     def _stop_stream(self):
         if self.stream:
             try:
-                self.stream.release()
-                logger.info("stream stopped")
+                if self.stream.isOpened():
+                    self.stream.release()
+                    logger.info("stream stopped")
             except Exception as e:
                 logger.info(f'error stopping stream: {e}')
         if self._reader_thread and self._reader_thread.is_alive():
             self._reader_thread.join(timeout=1)
         self.stream = None
         self.streaming = False
-        # send response 'recording-saved' via ws to tell FE to refresh list
 
 
     def _read_frames(self):
@@ -130,6 +131,10 @@ class CameraTrack(VideoStreamTrack):
             ret, frame = self.stream.read()
             if ret:
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                if np.all(frame == 0):
+                    pass
+                    # logger.info('blank frame read, check hardware connections and power')
+                    # self.streaming = False
             else:
                 logger.info('error reading frame, ret is None')
                 frame = np.zeros((CAMERA_HEIGHT, CAMERA_WIDTH, 3), dtype=np.uint8)
