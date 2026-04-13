@@ -8,6 +8,8 @@ import asyncio
 import logging
 import json
 import os
+import cv2
+import base64
 
 from Task import get_capture_ls, remote_stats, delete_capture
 from MicrophoneTrack import MicrophoneTrack
@@ -128,10 +130,19 @@ async def ws_endpoint(ws: WebSocket):
                 #     })
                 if recorder:
                     await recorder.stop()
+                    thumb_cap = cv2.VideoCapture(video_filepath)
+                    no_frames = thumb_cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                    if no_frames > 0:
+                        thumb_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        ret, thumbnail = thumb_cap.read()
+                        if ret:
+                            _, buffer = cv2.imencode('.jpg', thumbnail)
+                            thumbnail64 = base64.b64encode(buffer).decode('utf-8')
+                    thumb_cap.release()
                     await ws.send_json({
                         "type": "recording-saved",
                         "filename": video_filename,
-                        "thumbnail": []
+                        "thumbnail": thumbnail64
                     })
 
             
