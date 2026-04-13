@@ -66,19 +66,21 @@ class CameraTrack(VideoStreamTrack):
             _prev_connected = self.connected
             self.connected = self._status()
             State.camera_connected = self.connected
+            # logger.info(f'watchdog:_prev_connected: {_prev_connected}, self.connected: {self.connected}, self.streaming: {self.streaming}')
             if (_prev_connected != self.connected):
+                # logger.info('watchdog:_prev_connected != self.connected')
                 logger.info(f'camera {'connected' if self.connected else 'disconnected'}')
                 if self.connected:
                     await asyncio.sleep(2)
-                    self._start_stream()
+                    await self._start_stream()
                 else:
                     await asyncio.sleep(2)
                     self._stop_stream()
-            # print(_prev_connected, self.connected, self.streaming)
             if (self.connected and not self.streaming):
-                self._stop_stream()
+                # await asyncio.sleep(2)
+                # self._stop_stream()
                 await asyncio.sleep(2)
-                self._start_stream()
+                await self._start_stream()
             await asyncio.sleep(5)
 
     
@@ -92,24 +94,30 @@ class CameraTrack(VideoStreamTrack):
             return False
         
     
-    def _start_stream(self):
+    async def _start_stream(self):
         logger.info('starting stream')
-        try:
-            for i in range(5):
-                self.stream = cv2.VideoCapture(self._device_name)
-                if self.stream.isOpened():
-                    logger.info('started stream')
-                    self.streaming = True
-                    self._reader_thread = Thread(target=self._read_frames, daemon=True)
-                    self._reader_thread.start()
-                    break
-                time.sleep(0.2)
-            else:
-                logger.info('failed to open stream')
+        if self.streaming:
+            logger.info('starting stream skipped - already streaming')
+        else:
+            try:
+                for i in range(5):
+                    try:
+                        self.stream = cv2.VideoCapture(self._device_name)
+                    except Exception as e:
+                        logger.info(f'stream open exception: {e}')
+                    if self.stream.isOpened():
+                        logger.info('started stream')
+                        self.streaming = True
+                        self._reader_thread = Thread(target=self._read_frames, daemon=True)
+                        self._reader_thread.start()
+                        break
+                    await asyncio.sleep(0.2)
+                else:
+                    logger.info('failed to open stream')
+                    self.streaming = False
+            except Exception as e:
+                logger.info(f'error starting stream: {e}')
                 self.streaming = False
-        except Exception as e:
-            logger.info(f'error starting stream: {e}')
-            self.streaming = False
 
 
     def _stop_stream(self):
@@ -138,7 +146,7 @@ class CameraTrack(VideoStreamTrack):
             else:
                 logger.info('error reading frame, ret is None')
                 frame = np.zeros((CAMERA_HEIGHT, CAMERA_WIDTH, 3), dtype=np.uint8)
-                self.streaming = False
+                # self.streaming = False
             try:
                 # self._stream_queue.put_nowait(frame)
                 self._stream_queue.append(frame)
@@ -157,67 +165,67 @@ class CameraTrack(VideoStreamTrack):
                     logger.info(f'error queueing record frame: {e}')
 
     
-    def _write_frames(self, path: str):
-        try:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            writer = cv2.VideoWriter(
-                path,
-                fourcc,
-                CAMERA_FPS,
-                (CAMERA_WIDTH, CAMERA_HEIGHT)
-            )
-        except:
-            logging.error('Error setting up Video Writer')
+    # def _write_frames(self, path: str):
+    #     try:
+    #         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    #         writer = cv2.VideoWriter(
+    #             path,
+    #             fourcc,
+    #             CAMERA_FPS,
+    #             (CAMERA_WIDTH, CAMERA_HEIGHT)
+    #         )
+    #     except:
+    #         logging.error('Error setting up Video Writer')
         
 
-        if not writer.isOpened():
-            logger.error("failed to open VideoWriter")
-            return
+    #     if not writer.isOpened():
+    #         logger.error("failed to open VideoWriter")
+    #         return
 
-        logger.info("saving frames")
-        self.saving = True
+    #     logger.info("saving frames")
+    #     self.saving = True
 
-        while self.recording or not self._record_queue.empty():
-            try:
-                frame = self._record_queue.get(timeout=1)
-                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  # Convert RGB -> BGR (IMPORTANT!!)
-                h, w = frame.shape[:2]
-                if (w, h) != (CAMERA_WIDTH, CAMERA_HEIGHT):
-                    frame = cv2.resize(frame, (CAMERA_WIDTH, CAMERA_HEIGHT))
-                writer.write(frame)
+    #     while self.recording or not self._record_queue.empty():
+    #         try:
+    #             frame = self._record_queue.get(timeout=1)
+    #             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  # Convert RGB -> BGR (IMPORTANT!!)
+    #             h, w = frame.shape[:2]
+    #             if (w, h) != (CAMERA_WIDTH, CAMERA_HEIGHT):
+    #                 frame = cv2.resize(frame, (CAMERA_WIDTH, CAMERA_HEIGHT))
+    #             writer.write(frame)
 
-            except queue.Empty:
-                continue
-            except Exception as e:
-                logger.error(f"error writing frame: {e}")
+    #         except queue.Empty:
+    #             continue
+    #         except Exception as e:
+    #             logger.error(f"error writing frame: {e}")
 
-        writer.release()
-        logger.info("video saved")
-        self.saving = False
-        # send message to update UI
+    #     writer.release()
+    #     logger.info("video saved")
+    #     self.saving = False
+    #     # send message to update UI
 
     
-    def start_record(self, path):
-        logger.info('start recording')
-        if self.recording:
-            return
-        self._recorder_thread = Thread(
-            target=self._write_frames,
-            args=(path,),
-            daemon=True
-        )
-        try:
-            self._recorder_thread.start()
-        except Exception as e:
-            logger.info(f'error starting recorder thread: {e}')
-        self.recording = True
+    # def start_record(self, path):
+    #     logger.info('start recording')
+    #     if self.recording:
+    #         return
+    #     self._recorder_thread = Thread(
+    #         target=self._write_frames,
+    #         args=(path,),
+    #         daemon=True
+    #     )
+    #     try:
+    #         self._recorder_thread.start()
+    #     except Exception as e:
+    #         logger.info(f'error starting recorder thread: {e}')
+    #     self.recording = True
 
 
-    def stop_record(self):
-        logger.info('stop recording')
-        if self._recorder_thread and self._recorder_thread.is_alive():
-            self._recorder_thread.join(timeout=2)
-        self.recording = False
+    # def stop_record(self):
+    #     logger.info('stop recording')
+    #     if self._recorder_thread and self._recorder_thread.is_alive():
+    #         self._recorder_thread.join(timeout=2)
+    #     self.recording = False
 
     
     async def recv(self):

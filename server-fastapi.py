@@ -1,6 +1,8 @@
 from aiortc import RTCPeerConnection, sdp, RTCSessionDescription
+from aiortc.contrib.media import MediaRecorder
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, WebSocketException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 import uvicorn
 import asyncio
 import logging
@@ -8,17 +10,13 @@ import json
 import os
 
 from Task import get_capture_ls, remote_stats, delete_capture
-from old_code.Camera import CameraStreamTrack
-from old_code.Microphone import MicrophoneStreamTrack
 from MicrophoneTrack import MicrophoneTrack
 from CameraTrack import CameraTrack
-from MediaManager import MediaManager
 import State
 from pydantic import BaseModel
 
 
 CAPTURE_FOLDER = './captures'
-
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('server')
@@ -50,6 +48,17 @@ async def capture_list():
         }
 
 
+@app.get("/capture/download")
+async def capture_download(title: str):
+    logger.info(title)
+    if os.path.exists:
+        return FileResponse(
+            path=os.path.join(CAPTURE_FOLDER, title),
+            media_type="video/mp4",
+            filename=title
+        )
+
+
 class CaptureDeleteRequest(BaseModel):
     title: str
 
@@ -70,7 +79,7 @@ async def ws_endpoint(ws: WebSocket):
     pc = None
     camera_track = None
     audio_track = None
-    # media_manager = None
+    recorder = None
 
     logger = logging.getLogger('websocket')
     
@@ -91,18 +100,34 @@ async def ws_endpoint(ws: WebSocket):
             
             elif data['type'] == "recording-start":
                 video_filename = data['filename']
+                video_filepath = os.path.join(CAPTURE_FOLDER, video_filename)
                 logger.info(f'recording to file: {video_filename}')
                 State.record = True
-                if pc and camera_track and audio_track:
-                    camera_track.start_record(os.path.join(CAPTURE_FOLDER, video_filename))
+                # if pc and camera_track and audio_track:
+                #     camera_track.start_record(os.path.join(CAPTURE_FOLDER, video_filename))
+                recorder = MediaRecorder(video_filepath)
+                if audio_track:
+                    recorder.addTrack(audio_track)
+                if camera_track:
+                    recorder.addTrack(camera_track)
+                if recorder:
+                    await recorder.start()
+                    logger.info('recorder start')
                 
             elif data['type'] == "recording-end":
                 logger.info('recording ended')
                 State.record = False
-                if pc and camera_track and audio_track:
-                    camera_track.stop_record()
-                    while camera_track.saving:
-                        pass
+                # if pc and camera_track and audio_track:
+                #     camera_track.stop_record()
+                #     while camera_track.saving:
+                #         pass
+                #     await ws.send_json({
+                #         "type": "recording-saved",
+                #         "filename": video_filename,
+                #         "thumbnail": []
+                #     })
+                if recorder:
+                    await recorder.stop()
                     await ws.send_json({
                         "type": "recording-saved",
                         "filename": video_filename,
@@ -117,8 +142,6 @@ async def ws_endpoint(ws: WebSocket):
                 logger.info('offer')
                 try:
                     logger.info('offer processing')
-                    
-                    # media_manager = MediaManager()
 
                     camera_track = CameraTrack()
                     audio_track = MicrophoneTrack()
@@ -156,6 +179,11 @@ async def ws_endpoint(ws: WebSocket):
                     offer = RTCSessionDescription(sdp=data['sdp'], type=data['type'])
                     await pc.setRemoteDescription(offer)
                     logger.info("remote description set")
+
+                    # @pc.on("track")
+                    # def on_track(track):
+                    #     recorder.addTrack(track)
+                    #     logger.info('recorder added track')
 
                     for t in pc.getTransceivers():
                         if t.kind == "audio":
@@ -223,8 +251,6 @@ async def ws_endpoint(ws: WebSocket):
                 await pc.close()
             except:
                 pass
-        # del media_manager
-
 
 
 # uvicorn server-fastapi:app --host 0.0.0.0 --port 8000 --reload
