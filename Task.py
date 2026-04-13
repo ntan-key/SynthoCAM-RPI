@@ -5,22 +5,30 @@ import shutil
 from fastapi import WebSocket
 import asyncio
 import logging
+import base64
 import State  # global variables
+
+
+def get_thumbnail():
+    pass
 
 
 def get_capture_ls(capture_folder):
     logger = logging.getLogger("capture-ls")
     captures = [];
     for file in os.listdir(capture_folder):
-        thumbnail = []
-        cap = cv2.VideoCapture(os.path.join(capture_folder))
-        no_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        # logger.info(f'{file} has {no_frames} frames')
+        thumbnail = [[[]]]
+        thumb_cap = cv2.VideoCapture(os.path.join(capture_folder, file))
+        no_frames = thumb_cap.get(cv2.CAP_PROP_FRAME_COUNT)
         if no_frames > 0:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            ret, thumbnail = cap.read()
+            thumb_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret, thumbnail = thumb_cap.read()
+            if ret:
+                _, buffer = cv2.imencode('.jpg', thumbnail)
+                thumbnail64 = base64.b64encode(buffer).decode('utf-8')
 
-        captures.append({'title': file, 'thumbnail': thumbnail})
+        captures.append({'title': file, 'thumbnail': thumbnail64})
+        thumb_cap.release()
     return captures
 
 # [{'title': 'output.avi', 'thumbnail': ''}]
