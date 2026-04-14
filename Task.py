@@ -9,10 +9,6 @@ import base64
 import State  # global variables
 
 
-def get_thumbnail():
-    pass
-
-
 def get_capture_ls(capture_folder):
     logger = logging.getLogger("capture-ls")
     captures = [];
