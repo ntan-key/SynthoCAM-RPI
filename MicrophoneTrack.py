@@ -193,7 +193,8 @@ class MicrophoneTrack(MediaStreamTrack):
             return frame
 
 
-    def __del__(self):       
+    def stop(self):       
+    # def __del__(self):       
         if self._watchdog_task:
             self._watchdog_task.cancel()
             self._watchdog_task = None

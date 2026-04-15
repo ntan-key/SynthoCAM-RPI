@@ -1,5 +1,5 @@
 from aiortc import RTCPeerConnection, sdp, RTCSessionDescription
-from aiortc.contrib.media import MediaRecorder
+from aiortc.contrib.media import MediaRecorder, MediaRelay
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, WebSocketException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -16,6 +16,7 @@ from MicrophoneTrack import MicrophoneTrack
 from CameraTrack import CameraTrack
 import State
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
 
 CAPTURE_FOLDER = './captures'
@@ -23,11 +24,42 @@ CAPTURE_FOLDER = './captures'
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('server')
 
-app = FastAPI()
+relay = MediaRelay()
+
+
+# camera_track = None
+# audio_track = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info('FastAPI app startup')
+    # global camera_track, audio_track
+    # camera_track = CameraTrack()
+    # audio_track = MicrophoneTrack()
+    app.state.camera_track = CameraTrack()
+    app.state.audio_track = MicrophoneTrack()
+
+    yield
+
+    logger.info('FastAPI app shutdown')
+    # if camera_track:
+    #     camera_track.stop()
+    # if audio_track:
+    #     audio_track.stop()
+    if hasattr(app.state, "camera_track"):
+        app.state.camera_track.stop()
+        app.state.camera_track._stop_stream()
+        app.state.audio_track.stop()
+
+
+app = FastAPI(lifespan=lifespan)
+
+# app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://192.168.0.131:5173"],
+    allow_origins=["http://localhost:5173", "http://192.168.0.131:5173", "http://10.42.0.1:5173", "http://synthocam.local:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -77,11 +109,13 @@ async def capture_delete(req: CaptureDeleteRequest):
 
 @app.websocket('/')
 async def ws_endpoint(ws: WebSocket):
-
+    # global camera_track, audio_track
     pc = None
-    camera_track = None
-    audio_track = None
     recorder = None
+    # camera_track = None
+    # audio_track = None
+    camera_track = ws.app.state.camera_track
+    audio_track = ws.app.state.audio_track
 
     logger = logging.getLogger('websocket')
     
@@ -154,8 +188,11 @@ async def ws_endpoint(ws: WebSocket):
                 try:
                     logger.info('offer processing')
 
-                    camera_track = CameraTrack()
-                    audio_track = MicrophoneTrack()
+                    camera_track = ws.app.state.camera_track
+                    audio_track = ws.app.state.audio_track
+
+                    # camera_track = CameraTrack()
+                    # audio_track = MicrophoneTrack()
 
                     @pc.on("icecandidate")  # fires for every candidate as discovered, and a final time where candidate=None to signal end of gathering
                     async def on_ice_candidate(candidate):
@@ -199,11 +236,11 @@ async def ws_endpoint(ws: WebSocket):
                     for t in pc.getTransceivers():
                         if t.kind == "audio":
                             t.direction = "sendonly"
-                            t.sender.replaceTrack(audio_track)
+                            t.sender.replaceTrack(relay.subscribe(audio_track))
 
                         elif t.kind == "video":
                             t.direction = "sendonly"
-                            t.sender.replaceTrack(camera_track)
+                            t.sender.replaceTrack(relay.subscribe(camera_track))
 
                     # # pc.addTrack(audio_track)
                     # audio_transceiver = pc.addTransceiver("audio", direction="sendonly")
@@ -253,10 +290,10 @@ async def ws_endpoint(ws: WebSocket):
         logger.info('websocketexception')
 
     finally:
-        if audio_track:
-            audio_track.stop()
-        if camera_track:
-            camera_track.stop()
+        # if audio_track:
+        #     del audio_track
+        # if camera_track:
+        #     del camera_track
         if pc:
             try:
                 await pc.close()

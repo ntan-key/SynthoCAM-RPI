@@ -54,8 +54,8 @@ async def remote_stats(ws: WebSocket):
                 stats = {'type': 'remote-stats', 'cpu_temp': get_cpu_temp(), 'cpu_usage': get_cpu_usage(), 'storage_total': get_storage_usage()['total'], 'storage_used': get_storage_usage()['used']}
                 try:
                     await ws.send_json(stats)
-                except RuntimeError:
-                    logger.info('ws closed not sending')
+                except RuntimeError as e:
+                    logger.info(f'ws closed not sending: {e}')
                 await asyncio.sleep(1)
             except Exception as e:
                 logger.info(f'remote stats exception: {e}')
