@@ -24,32 +24,20 @@ CAPTURE_FOLDER = './captures'
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('server')
 
-relay = MediaRelay()
-
-
-# camera_track = None
-# audio_track = None
+# relay = MediaRelay()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info('FastAPI app startup')
-    # global camera_track, audio_track
-    # camera_track = CameraTrack()
-    # audio_track = MicrophoneTrack()
     app.state.camera_track = CameraTrack()
     app.state.audio_track = MicrophoneTrack()
 
     yield
 
     logger.info('FastAPI app shutdown')
-    # if camera_track:
-    #     camera_track.stop()
-    # if audio_track:
-    #     audio_track.stop()
     if hasattr(app.state, "camera_track"):
         app.state.camera_track.stop()
-        app.state.camera_track._stop_stream()
         app.state.audio_track.stop()
 
 
@@ -109,11 +97,8 @@ async def capture_delete(req: CaptureDeleteRequest):
 
 @app.websocket('/')
 async def ws_endpoint(ws: WebSocket):
-    # global camera_track, audio_track
     pc = None
     recorder = None
-    # camera_track = None
-    # audio_track = None
     camera_track = ws.app.state.camera_track
     audio_track = ws.app.state.audio_track
 
@@ -121,7 +106,39 @@ async def ws_endpoint(ws: WebSocket):
     
     await ws.accept()  # accept WebSocket handshake if a new client connects otherwise FastAPI rejects with 403
     pc = RTCPeerConnection()  # create new peer connection
+
+
+    # @pc.on("icecandidate")  # fires for every candidate as discovered, and a final time where candidate=None to signal end of gathering
+    # async def on_ice_candidate(candidate):
+    #     logger = logging.getLogger('peer-connection')
+    #     # Every time I discover a new way for someone to reach me, send info to other peer so they can try connecting to it
+    #     if candidate:  # don't fire on final candidate=None
+    #         try:
+    #             await ws.send(json.dumps({
+    #             'type': 'ice-candidate',
+    #             'candidate': {
+    #             'candidate': candidate.candidate,
+    #             'sdpMid': candidate.sdpMid,
+    #             'sdpMLineIndex': candidate.sdpMLineIndex
+    #             }
+    #             }))
+    #         except Exception as e:
+    #             logger.error('failed to send ice candidate')                                     
+
+    # @pc.on("connectionstatechange")
+    # async def on_connection_state_change():
+    #     logger = logging.getLogger('peer-connection')
+    #     logger.info(f"state: {pc.connectionState}")
+    #     if pc.connectionState == "checking":
+    #         logger.info("checking - testing candidates")
+    #     elif pc.connectionState == "connected":
+    #         logger.info("connected - working pair found")
+    #     elif pc.connectionState == "completed":
+    #         logger.info("completed - fully established")
+    #     elif pc.connectionState == "failed":
+    #         logger.error("connection failed")
     
+
     remote_stats_task = asyncio.create_task(remote_stats(ws))
     video_filename = None
 
@@ -144,8 +161,10 @@ async def ws_endpoint(ws: WebSocket):
                 recorder = MediaRecorder(video_filepath)
                 if audio_track:
                     recorder.addTrack(audio_track)
+                    # recorder.addTrack(relay.subscribe(audio_track))
                 if camera_track:
                     recorder.addTrack(camera_track)
+                    # recorder.addTrack(relay.subscribe(camera_track))
                 if recorder:
                     await recorder.start()
                     logger.info('recorder start')
@@ -236,11 +255,13 @@ async def ws_endpoint(ws: WebSocket):
                     for t in pc.getTransceivers():
                         if t.kind == "audio":
                             t.direction = "sendonly"
-                            t.sender.replaceTrack(relay.subscribe(audio_track))
+                            t.sender.replaceTrack(audio_track)
+                            # t.sender.replaceTrack(relay.subscribe(audio_track))
 
                         elif t.kind == "video":
                             t.direction = "sendonly"
-                            t.sender.replaceTrack(relay.subscribe(camera_track))
+                            t.sender.replaceTrack(camera_track)
+                            # t.sender.replaceTrack(relay.subscribe(camera_track))
 
                     # # pc.addTrack(audio_track)
                     # audio_transceiver = pc.addTransceiver("audio", direction="sendonly")
