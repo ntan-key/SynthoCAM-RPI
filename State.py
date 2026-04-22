@@ -1,3 +1,2 @@
-camera_connected = False
-microphone_connected = False
-record = False
+camera_status = "disconnected"
+microphone_status = "disconnected"

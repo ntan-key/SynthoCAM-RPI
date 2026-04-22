@@ -64,20 +64,26 @@ class CameraTrack(VideoStreamTrack):
 
     
     async def _watchdog(self):
-        while True:
-            _curr_status = self._status()
-            
-            if _curr_status != self.connected:
-                self.connected = _curr_status
-                State.camera_connected = _curr_status
+        await asyncio.sleep(2)
+        try:
+            while True:
+                _curr_status = self._status()
                 
-                logger.info(f'camera {'connected' if self.connected else 'disconnected'}')
-                
-                if self.connected:
-                    await self._start_stream()
-                else:
-                    await self._stop_stream()
-            await asyncio.sleep(5)
+                if _curr_status != self.connected:
+                    self.connected = _curr_status
+                    if not _curr_status: State.camera_status = "disconnected"
+                    
+                    logger.info(f'camera {'connected' if self.connected else 'disconnected'}')
+                    
+                    if self.connected:
+                        await self._start_stream()
+                    else:
+                        self._stop_stream()
+                await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            logger.info('watchdog cancelled')
+        except Exception as e:
+            logger.info(f'watchdog error: {e}')
 
 
     def _status(self):
@@ -92,37 +98,35 @@ class CameraTrack(VideoStreamTrack):
 
     async def _start_stream(self):
         logger.info('_start_stream()')
-        # async with self._lock:
-        logger.info('starting stream')
-        
-        # if self.stream:
-        if self.streaming:
-            logger.info('stream already open')
-            return
-        
         self._stop_event.clear()
-        
-        while not self.streaming:
-            try:
-                self.stream = cv2.VideoCapture(self._device_name)
-                ret, frame = self.stream.read()
-                if ret:
-                    self.streaming = True
-                else: 
+
+        async with self._lock:
+            logger.info('starting stream')
+                        
+            while not self.streaming:
+                try:
+                    self.stream = cv2.VideoCapture(self._device_name)
+                    ret, frame = self.stream.read()
+                    if ret:
+                        self.streaming = True
+                    else: 
+                        self.streaming = False
+                except Exception as e:
+                    logger.info(f'error opening stream: {e}') 
                     self.streaming = False
-            except Exception as e:
-                logger.info(f'error opening stream: {e}') 
-                self.streaming = False
-            await asyncio.sleep(0.2)
-            
-        logger.info('started stream')
-        self._reader_thread = threading.Thread(target=self._read_frames,daemon=True)
-        self._reader_thread.start()
+                await asyncio.sleep(0.2)
+
+            if self._reader_thread and self._reader_thread.is_alive():
+                self._reader_thread.join(timeout=0.5)
+            self._reader_thread = None
+                
+            logger.info('started stream')
+            self._reader_thread = threading.Thread(target=self._read_frames,daemon=True)
+            self._reader_thread.start()
 
 
-    async def _stop_stream(self):
+    def _stop_stream(self):
         logger.info('_stop_stream()')
-        # async with self._lock:
         self._stop_event.set()
         self.streaming = False
 
@@ -144,9 +148,9 @@ class CameraTrack(VideoStreamTrack):
 
         gc.collect()
 
-        # if self._reader_thread and self._reader_thread.is_alive():
-        #     self._reader_thread.join(timeout=0.5)
-        # self._reader_thread = None        
+        if self._reader_thread and self._reader_thread.is_alive():
+            self._reader_thread.join(timeout=0.5)
+        self._reader_thread = None        
 
 
     def _read_frames(self):
@@ -160,6 +164,7 @@ class CameraTrack(VideoStreamTrack):
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 if not np.all(frame == 0):
                     self._blank_count = 0
+                    State.camera_status = "connected"
                     try:
                         self._stream_queue.append(frame)
                         # self._stream_queue.put_nowait(frame)
@@ -177,13 +182,13 @@ class CameraTrack(VideoStreamTrack):
                     self._blank_count += 1
                     if self._blank_count == 20:
                         logger.info(f'power disconnected')
+                        State.camera_status = "no power"
                         self._stream_queue.clear()  # clear queue to prevent displaying last frame frozen
-                    pass
-            
             else:
                 # this is caused by usb partially disconnecting
                 # requires the stream to restart
                 logger.info('ret is None')
+                State.camera_status = "no data"
                 self._stop_event.set()
                 self.streaming = False
                 asyncio.run_coroutine_threadsafe(
@@ -193,11 +198,13 @@ class CameraTrack(VideoStreamTrack):
 
 
     async def _restart_stream(self):
-        async with self._lock:
-            logger.info('restarting stream')
-            await self._stop_stream()
-            await asyncio.sleep()
-            await self._start_stream()
+        logger.info('restarting stream')
+        self._stop_stream()
+        self._stop_event.set()
+        self.streaming = False
+        self.stream = None
+        await asyncio.sleep(1)
+        await self._start_stream()
 
     
     async def recv(self):
@@ -222,15 +229,17 @@ class CameraTrack(VideoStreamTrack):
             return frame
         
     
-    async def stop(self):    
+    def stop(self):    
         logger.info('stop()')
-        await self._stop_stream()
+
+        self.stream = None
+        self.streaming = False
 
         if self._reader_thread and self._reader_thread.is_alive():
             self._reader_thread.join(timeout=0.5)
 
-        gc.collect()
+        if self._watchdog_task:
+            self._watchdog_task.cancel()
+            self._watchdog_task = None
 
-        # if self._watchdog_task:
-        #     self._watchdog_task.cancel()
-        #     self._watchdog_task = None
+        gc.collect()

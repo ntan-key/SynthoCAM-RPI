@@ -24,30 +24,38 @@ CAPTURE_FOLDER = './captures'
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('server')
 
-# relay = MediaRelay()
+relay = MediaRelay()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info('FastAPI app startup')
-    app.state.camera_track = CameraTrack()
-    app.state.audio_track = MicrophoneTrack()
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     logger.info('FastAPI app startup')
+#     app.state.camera_track = CameraTrack()
+#     app.state.audio_track = MicrophoneTrack()
 
-    yield
+#     yield
 
-    logger.info('FastAPI app shutdown')
-    if hasattr(app.state, "camera_track"):
-        app.state.camera_track.stop()
-        app.state.audio_track.stop()
+#     logger.info('FastAPI app shutdown')
+#     if hasattr(app.state, "camera_track"):
+#         app.state.camera_track.stop()
+#         app.state.audio_track._stop()
 
 
-app = FastAPI(lifespan=lifespan)
-
-# app = FastAPI()
+app = FastAPI()
+# app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://192.168.0.131:5173", "http://10.42.0.1:5173", "http://synthocam.local:5173"],
+    allow_origins=["http://localhost:5173",
+                   "https://localhost:5173",
+                   "http://192.168.0.131:5173",
+                   "https://192.168.0.131:5173",
+                   "http://192.168.0.146:5173",
+                   "https://192.168.0.146:5173",
+                   "http://10.42.0.1:5173",
+                   "https://10.42.0.1:5173",
+                   "http://synthocam.local:5173",
+                   "https://synthocam.local:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -95,12 +103,14 @@ async def capture_delete(req: CaptureDeleteRequest):
 # Websocket Handling
 
 
-@app.websocket('/')
+@app.websocket('/ws')
 async def ws_endpoint(ws: WebSocket):
     pc = None
     recorder = None
-    camera_track = ws.app.state.camera_track
-    audio_track = ws.app.state.audio_track
+    camera_track = None
+    audio_track = None
+    # camera_track = ws.app.state.camera_track
+    # audio_track = ws.app.state.audio_track
 
     logger = logging.getLogger('websocket')
     
@@ -155,9 +165,6 @@ async def ws_endpoint(ws: WebSocket):
                 video_filename = data['filename']
                 video_filepath = os.path.join(CAPTURE_FOLDER, video_filename)
                 logger.info(f'recording to file: {video_filename}')
-                State.record = True
-                # if pc and camera_track and audio_track:
-                #     camera_track.start_record(os.path.join(CAPTURE_FOLDER, video_filename))
                 recorder = MediaRecorder(video_filepath)
                 if audio_track:
                     recorder.addTrack(audio_track)
@@ -171,16 +178,6 @@ async def ws_endpoint(ws: WebSocket):
                 
             elif data['type'] == "recording-end":
                 logger.info('recording ended')
-                State.record = False
-                # if pc and camera_track and audio_track:
-                #     camera_track.stop_record()
-                #     while camera_track.saving:
-                #         pass
-                #     await ws.send_json({
-                #         "type": "recording-saved",
-                #         "filename": video_filename,
-                #         "thumbnail": []
-                #     })
                 if recorder:
                     await recorder.stop()
                     thumb_cap = cv2.VideoCapture(video_filepath)
@@ -207,11 +204,11 @@ async def ws_endpoint(ws: WebSocket):
                 try:
                     logger.info('offer processing')
 
-                    camera_track = ws.app.state.camera_track
-                    audio_track = ws.app.state.audio_track
+                    # camera_track = ws.app.state.camera_track
+                    # audio_track = ws.app.state.audio_track
 
-                    # camera_track = CameraTrack()
-                    # audio_track = MicrophoneTrack()
+                    camera_track = CameraTrack()
+                    audio_track = MicrophoneTrack()
 
                     @pc.on("icecandidate")  # fires for every candidate as discovered, and a final time where candidate=None to signal end of gathering
                     async def on_ice_candidate(candidate):
@@ -246,11 +243,6 @@ async def ws_endpoint(ws: WebSocket):
                     offer = RTCSessionDescription(sdp=data['sdp'], type=data['type'])
                     await pc.setRemoteDescription(offer)
                     logger.info("remote description set")
-
-                    # @pc.on("track")
-                    # def on_track(track):
-                    #     recorder.addTrack(track)
-                    #     logger.info('recorder added track')
 
                     for t in pc.getTransceivers():
                         if t.kind == "audio":
@@ -311,10 +303,6 @@ async def ws_endpoint(ws: WebSocket):
         logger.info('websocketexception')
 
     finally:
-        # if audio_track:
-        #     del audio_track
-        # if camera_track:
-        #     del camera_track
         if pc:
             try:
                 await pc.close()
@@ -325,9 +313,3 @@ async def ws_endpoint(ws: WebSocket):
 # uvicorn server-fastapi:app --host 0.0.0.0 --port 8000 --reload
 # http://localhost:8000/
 # http://192.168.0.131:8000
-
-
-# INFO:peer-connection:state: failed
-# ERROR:peer-connection:connection failed
-# INFO:peer-connection:state: failed
-# ERROR:peer-connection:connection failed
