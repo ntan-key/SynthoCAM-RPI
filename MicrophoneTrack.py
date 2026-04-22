@@ -20,6 +20,7 @@ SD_NAME = 'KT USB Audio'
 
 # Audio settings
 AUDIO_SAMPLE_RATE = 48000
+# AUDIO_SAMPLE_RATE = 16000
 AUDIO_CHUNK = 960  # 20ms at 48kHz
 # AUDIO_CHUNK = 2048
 AUDIO_CHANNELS = 1
@@ -59,7 +60,7 @@ class MicrophoneTrack(MediaStreamTrack):
         # stream
         self.stream = None
         self.pts = 0
-        self._stream_queue = asyncio.Queue(maxsize=1)
+        self._stream_queue = asyncio.Queue(maxsize=10)
         self.loop = asyncio.get_running_loop()
         
 
@@ -73,6 +74,7 @@ class MicrophoneTrack(MediaStreamTrack):
             _prev_connected = self.connected
             self.connected = self._status()
             State.microphone_connected = self.connected
+            State.microphone_status = "connected" if self.connected else "disconnected"
             if (_prev_connected != self.connected):
                 logger.info(f'microphone {'connected' if self.connected else 'disconnected'}')
                 if self.connected:
@@ -165,12 +167,82 @@ class MicrophoneTrack(MediaStreamTrack):
                 self._stream_queue.put_nowait(data)
             except asyncio.QueueFull:
                 logger.info('queue full again')
+
+
+    # async def recv(self):
+    #     try:
+    #         # ✅ REQUIRED: throttle to real-time
+    #         await asyncio.sleep(AUDIO_CHUNK / AUDIO_SAMPLE_RATE)
+
+    #         data = np.zeros(AUDIO_CHUNK, dtype=np.int16)
+
+    #         frame = AudioFrame(format="s16", layout="mono", samples=AUDIO_CHUNK)
+    #         frame.sample_rate = AUDIO_SAMPLE_RATE
+    #         frame.planes[0].update(data.tobytes())
+
+    #         frame.pts = self.pts
+    #         frame.time_base = fractions.Fraction(1, AUDIO_SAMPLE_RATE)
+
+    #         self.pts += AUDIO_CHUNK
+
+    #         return frame
+
+    #     except Exception as e:
+    #         logger.info(f"audio recv error: {e}")
+
+
+    # async def recv(self):
+    #     # await asyncio.sleep(AUDIO_CHUNK / AUDIO_SAMPLE_RATE)
+    #     try:
+    #         if self.connected and self.streaming:
+    #             # data = await self._stream_queue.get()
+    #             try:
+    #                 data = await self._stream_queue.get_nowait()
+    #             except asyncio.QueueEmpty:
+    #                 data = np.asarray(data).reshape(-1)
+    #             data = np.asarray(data).reshape(-1)
+    #         else:
+    #             data = np.zeros(AUDIO_CHUNK, dtype=np.int16)
+
+    #         # enforce correct size
+    #         if data.shape[0] != AUDIO_CHUNK:
+    #             data = np.zeros(AUDIO_CHUNK, dtype=np.int16)
+
+    #         # IMPORTANT: must be bytes
+    #         data = data.astype(np.int16).tobytes()
+
+    #         frame = AudioFrame(format="s16", layout="mono", samples=AUDIO_CHUNK)
+    #         frame.sample_rate = AUDIO_SAMPLE_RATE
+    #         frame.planes[0].update(data)
+
+    #         frame.pts = self.pts
+    #         frame.time_base = fractions.Fraction(1, AUDIO_SAMPLE_RATE)
+    #         self.pts += AUDIO_CHUNK
+
+    #         return frame
+
+    #     except Exception as e:
+    #         logger.info(f"audio recv error: {e}")
+
+    #         silence = np.zeros(AUDIO_CHUNK, dtype=np.int16).tobytes()
+
+    #         frame = AudioFrame(format="s16", layout="mono", samples=AUDIO_CHUNK)
+    #         frame.sample_rate = AUDIO_SAMPLE_RATE
+    #         frame.planes[0].update(silence)
+
+    #         frame.pts = self.pts
+    #         frame.time_base = fractions.Fraction(1, AUDIO_SAMPLE_RATE)
+    #         self.pts += AUDIO_CHUNK
+
+    #         return frame
     
 
     async def recv(self):
+        await asyncio.sleep(AUDIO_CHUNK / AUDIO_SAMPLE_RATE)
         try:
             if self.connected and self.streaming:
                 data = await self._stream_queue.get()
+                data = np.asarray(data, dtype=np.int16).reshape(-1)
             else:
                 data = np.zeros(AUDIO_CHUNK, dtype=np.int16).tobytes()
             frame = AudioFrame(format="s16", layout="mono", samples=AUDIO_CHUNK)
@@ -193,7 +265,8 @@ class MicrophoneTrack(MediaStreamTrack):
             return frame
 
 
-    def __del__(self):       
+    def _stop(self):       
+        logger.info('stop()')       
         if self._watchdog_task:
             self._watchdog_task.cancel()
             self._watchdog_task = None

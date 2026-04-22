@@ -9,10 +9,6 @@ import base64
 import State  # global variables
 
 
-def get_thumbnail():
-    pass
-
-
 def get_capture_ls(capture_folder):
     logger = logging.getLogger("capture-ls")
     captures = [];
@@ -55,11 +51,11 @@ async def remote_stats(ws: WebSocket):
     try:
         while True:
             try:
-                stats = {'type': 'remote-stats', 'cpu_temp': get_cpu_temp(), 'cpu_usage': get_cpu_usage(), 'storage_total': get_storage_usage()['total'], 'storage_used': get_storage_usage()['used']}
+                stats = {'type': 'remote-stats', 'cpu_temp': get_cpu_temp(), 'cpu_usage': get_cpu_usage(), 'storage_total': get_storage_usage()['total'], 'storage_used': get_storage_usage()['used'], 'camera_status': State.camera_status, 'microphone_status': State.microphone_status}
                 try:
                     await ws.send_json(stats)
-                except RuntimeError:
-                    logger.info('ws closed not sending')
+                except RuntimeError as e:
+                    logger.info(f'ws closed not sending: {e}')
                 await asyncio.sleep(1)
             except Exception as e:
                 logger.info(f'remote stats exception: {e}')
