@@ -6,7 +6,7 @@ aiosignal==1.4.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.1
-apt-listchanges==4.8
+# apt-listchanges==4.8
 arrow==1.3.0
 attrs==25.3.0
 av==16.1.0
@@ -34,7 +34,7 @@ frozenlist==1.8.0
 google-crc32c==1.8.0
 gpiod==2.2.0
 gpiozero==2.0.1
-gyp-next==0.16.2
+# gyp-next==0.16.2
 h11==0.16.0
 httpcore==1.0.9
 httptools==0.7.1
