@@ -9,6 +9,7 @@ import sounddevice as sd
 from aiortc import MediaStreamTrack
 from av.audio.frame import AudioFrame
 from collections import deque
+import subprocess
 
 import State
 
@@ -88,7 +89,13 @@ class MicrophoneTrack(MediaStreamTrack):
 
     def _status(self):
         if os.path.exists('/dev/snd/by-id'):
-            output = os.popen('ls -l /dev/snd/by-id').read()
+            # output = os.popen('ls -l /dev/snd/by-id').read()
+            result = subprocess.run(
+                ["/bin/ls", "-l", "/dev/snd/by-id"],
+                capture_output=True,
+                text=True
+            )
+            output = result.stdout
             for line in output.splitlines():
                 if MICROPHONE_NAME in line:
                     return True

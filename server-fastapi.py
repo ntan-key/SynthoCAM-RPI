@@ -54,6 +54,8 @@ app.add_middleware(
                    "https://192.168.0.146:5173",
                    "http://10.42.0.1:5173",
                    "https://10.42.0.1:5173",
+                   "http://10.42.0.2:5173",
+                   "https://10.42.0.2:5173",
                    "http://synthocam.local:5173",
                    "https://synthocam.local:5173",
                    "http://172.16.10.46:5173",

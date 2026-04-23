@@ -9,6 +9,7 @@ import numpy as np
 import os
 import queue
 import threading
+import subprocess
 
 import State
 
@@ -88,7 +89,13 @@ class CameraTrack(VideoStreamTrack):
 
     def _status(self):
         if os.path.exists('/dev/v4l/by-id'):
-            output = os.popen('ls -l /dev/v4l/by-id').read()
+            # output = os.popen('ls -l /dev/v4l/by-id').read()
+            result = subprocess.run(
+                ["/bin/ls", "-l", "/dev/v4l/by-id"],
+                capture_output=True,
+                text=True
+            )
+            output = result.stdout
             for line in output.splitlines():
                 if CAMERA_NAME in line:
                     return True
