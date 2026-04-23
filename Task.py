@@ -23,7 +23,7 @@ def get_capture_ls(capture_folder):
                 _, buffer = cv2.imencode('.jpg', thumbnail)
                 thumbnail64 = base64.b64encode(buffer).decode('utf-8')
 
-        captures.append({'title': file, 'thumbnail': thumbnail64})
+                captures.append({'title': file, 'thumbnail': thumbnail64})
         thumb_cap.release()
     return captures
 
