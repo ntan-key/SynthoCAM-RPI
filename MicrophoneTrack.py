@@ -15,9 +15,16 @@ import State
 
 
 # ls -l /dev/snd/by-id
-MICROPHONE_NAME = 'usb-KTMicro_KT_USB_Audio_2021-07-19-0000-0000-0000--00'
+# Use this for seperate USB audio 
+#MICROPHONE_NAME = 'usb-KTMicro_KT_USB_Audio_2021-07-19-0000-0000-0000--00'   # Sperate USB audio device   
+#SD_NAME = 'KT USB Audio'
+
+# Use this for video dongle audio 
+MICROPHONE_NAME = 'usb-MACROSILICON_USB_Video_20200909-02'      # Video dongle Audio
+SD_NAME = 'MS210x'
+
+# Sound device list for SD Name
 # python3 -m sounddevice
-SD_NAME = 'KT USB Audio'
 
 # Audio settings
 AUDIO_SAMPLE_RATE = 48000
@@ -61,7 +68,8 @@ class MicrophoneTrack(MediaStreamTrack):
         # stream
         self.stream = None
         self.pts = 0
-        self._stream_queue = asyncio.Queue(maxsize=10)
+        #self._stream_queue = asyncio.Queue(maxsize=10)
+        self._stream_queue = asyncio.Queue(maxsize=2)  # Reduced queue to comback audio backlog...
         self.loop = asyncio.get_running_loop()
         
 
@@ -178,7 +186,6 @@ class MicrophoneTrack(MediaStreamTrack):
 
     # async def recv(self):
     #     try:
-    #         # ✅ REQUIRED: throttle to real-time
     #         await asyncio.sleep(AUDIO_CHUNK / AUDIO_SAMPLE_RATE)
 
     #         data = np.zeros(AUDIO_CHUNK, dtype=np.int16)
@@ -245,7 +252,7 @@ class MicrophoneTrack(MediaStreamTrack):
     
 
     async def recv(self):
-        await asyncio.sleep(AUDIO_CHUNK / AUDIO_SAMPLE_RATE)
+        # await asyncio.sleep(AUDIO_CHUNK / AUDIO_SAMPLE_RATE)
         try:
             if self.connected and self.streaming:
                 data = await self._stream_queue.get()
