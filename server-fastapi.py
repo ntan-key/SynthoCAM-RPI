@@ -214,7 +214,7 @@ async def ws_endpoint(ws: WebSocket):
                     # audio_track = ws.app.state.audio_track
 
                     camera_track = CameraTrack()  ## comment out to remove video and reboot pi
-                    # audio_track = MicrophoneTrack()  ## comment out to remove audio and reboot pi
+                    audio_track = MicrophoneTrack()  ## comment out to remove audio and reboot pi
 
                     @pc.on("icecandidate")  # fires for every candidate as discovered, and a final time where candidate=None to signal end of gathering
                     async def on_ice_candidate(candidate):

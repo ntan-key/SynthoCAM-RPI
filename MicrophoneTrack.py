@@ -264,6 +264,7 @@ class MicrophoneTrack(MediaStreamTrack):
             frame.planes[0].update(data)
             frame.pts = self.pts
             frame.time_base = fractions.Fraction(1, AUDIO_SAMPLE_RATE)
+            logger.info(f'pts = {self.pts}, time_base = {fractions.Fraction(1, AUDIO_SAMPLE_RATE)}')
             self.pts += AUDIO_CHUNK
             return frame
 
