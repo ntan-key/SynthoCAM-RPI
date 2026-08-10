@@ -68,8 +68,13 @@ class MicrophoneTrack(MediaStreamTrack):
         # stream
         self.stream = None
         self.pts = 0
-        #self._stream_queue = asyncio.Queue(maxsize=10)
-        self._stream_queue = asyncio.Queue(maxsize=2)  # Reduced queue to comback audio backlog...
+        # VERSION 1 asyncio.Queue
+        # self._stream_queue = asyncio.Queue(maxsize=10)
+        self._stream_queue = asyncio.Queue(maxsize=3)  # Reduced queue to comback audio backlog...
+        # VERSION 2 deque
+        # self._stream_queue = deque(maxlen=3)
+        self._next_audio_time = None
+
         self.loop = asyncio.get_running_loop()
         
 
@@ -160,15 +165,16 @@ class MicrophoneTrack(MediaStreamTrack):
     def _stream_callback(self, indata, frames, time, status):
         if status:
             logger.info(f'stream status: {status}')
+        data = indata.copy().astype(np.int16).reshape(-1).tobytes()
         try:
-            self.loop.call_soon_threadsafe(
-                self._safe_put,
-                indata.copy()
-            )
-            # await self._stream_queue.put(indata.copy())
+            # VERSION 1
+            self.loop.call_soon_threadsafe(self._safe_put, data)
+            # VERSION 2
+            # self._stream_queue.append(data)
         except asyncio.QueueFull:
             logger.info('queue full')
             pass
+
 
     def _safe_put(self, data):
         try:
@@ -182,81 +188,30 @@ class MicrophoneTrack(MediaStreamTrack):
                 self._stream_queue.put_nowait(data)
             except asyncio.QueueFull:
                 logger.info('queue full again')
-
-
-    # async def recv(self):
-    #     try:
-    #         await asyncio.sleep(AUDIO_CHUNK / AUDIO_SAMPLE_RATE)
-
-    #         data = np.zeros(AUDIO_CHUNK, dtype=np.int16)
-
-    #         frame = AudioFrame(format="s16", layout="mono", samples=AUDIO_CHUNK)
-    #         frame.sample_rate = AUDIO_SAMPLE_RATE
-    #         frame.planes[0].update(data.tobytes())
-
-    #         frame.pts = self.pts
-    #         frame.time_base = fractions.Fraction(1, AUDIO_SAMPLE_RATE)
-
-    #         self.pts += AUDIO_CHUNK
-
-    #         return frame
-
-    #     except Exception as e:
-    #         logger.info(f"audio recv error: {e}")
-
-
-    # async def recv(self):
-    #     # await asyncio.sleep(AUDIO_CHUNK / AUDIO_SAMPLE_RATE)
-    #     try:
-    #         if self.connected and self.streaming:
-    #             # data = await self._stream_queue.get()
-    #             try:
-    #                 data = await self._stream_queue.get_nowait()
-    #             except asyncio.QueueEmpty:
-    #                 data = np.asarray(data).reshape(-1)
-    #             data = np.asarray(data).reshape(-1)
-    #         else:
-    #             data = np.zeros(AUDIO_CHUNK, dtype=np.int16)
-
-    #         # enforce correct size
-    #         if data.shape[0] != AUDIO_CHUNK:
-    #             data = np.zeros(AUDIO_CHUNK, dtype=np.int16)
-
-    #         # IMPORTANT: must be bytes
-    #         data = data.astype(np.int16).tobytes()
-
-    #         frame = AudioFrame(format="s16", layout="mono", samples=AUDIO_CHUNK)
-    #         frame.sample_rate = AUDIO_SAMPLE_RATE
-    #         frame.planes[0].update(data)
-
-    #         frame.pts = self.pts
-    #         frame.time_base = fractions.Fraction(1, AUDIO_SAMPLE_RATE)
-    #         self.pts += AUDIO_CHUNK
-
-    #         return frame
-
-    #     except Exception as e:
-    #         logger.info(f"audio recv error: {e}")
-
-    #         silence = np.zeros(AUDIO_CHUNK, dtype=np.int16).tobytes()
-
-    #         frame = AudioFrame(format="s16", layout="mono", samples=AUDIO_CHUNK)
-    #         frame.sample_rate = AUDIO_SAMPLE_RATE
-    #         frame.planes[0].update(silence)
-
-    #         frame.pts = self.pts
-    #         frame.time_base = fractions.Fraction(1, AUDIO_SAMPLE_RATE)
-    #         self.pts += AUDIO_CHUNK
-
-    #         return frame
     
 
     async def recv(self):
         # await asyncio.sleep(AUDIO_CHUNK / AUDIO_SAMPLE_RATE)
+        now = self.loop.time()
+        if self._next_audio_time is None:
+            self._next_audio_time = now
+
+        delay = self._next_audio_time - now
+
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+        self._next_audio_time += (
+            AUDIO_CHUNK / AUDIO_SAMPLE_RATE
+        )
         try:
             if self.connected and self.streaming:
-                data = await self._stream_queue.get()
-                data = np.asarray(data, dtype=np.int16).reshape(-1)
+                # VERSION 1
+                data = await self._stream_queue.get()  # causing lag?
+                # data = np.asarray(data, dtype=np.int16).reshape(-1)
+                # VERSION 2
+                # data = self._stream_queue[-1]
+                # data = self._stream_queue.popleft()
             else:
                 data = np.zeros(AUDIO_CHUNK, dtype=np.int16).tobytes()
             frame = AudioFrame(format="s16", layout="mono", samples=AUDIO_CHUNK)
@@ -288,3 +243,5 @@ class MicrophoneTrack(MediaStreamTrack):
         self._stop_stream()
         self.connected = False
         self._device_index = -1
+        # VERSION 2 deque
+        # self._stream_queue.clear()
