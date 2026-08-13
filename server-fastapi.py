@@ -10,8 +10,9 @@ import json
 import os
 import cv2
 import base64
+import socket
 
-from Task import get_capture_ls, remote_stats, delete_capture
+from Task import get_capture_ls, remote_stats, delete_capture, get_ip
 from MicrophoneTrack import MicrophoneTrack
 from CameraTrack import CameraTrack
 import State
@@ -77,6 +78,13 @@ async def home():
         }
 
 
+@app.get("/ip")
+async def ip():
+    return {
+        "ip": get_ip()
+    }
+
+
 @app.get("/capture/list")
 async def capture_list():
     return {
@@ -103,6 +111,28 @@ class CaptureDeleteRequest(BaseModel):
 async def capture_delete(req: CaptureDeleteRequest):
     logger.info(req)
     delete_capture(os.path.join(CAPTURE_FOLDER, req.title))
+    return {'status': 'ok'}
+
+
+class LowerRequest(BaseModel):
+    frequency: int
+
+
+# Change lower cut off frequency of audio filter
+@app.post("/lower")
+async def lower(req: LowerRequest):
+    State.lower_cutoff = req.frequency
+    return {'status': 'ok'}
+
+
+class UpperRequest(BaseModel):
+    frequency: int
+
+
+# Change upper cut off frequency of audio filter
+@app.post("/upper")
+async def upper(req: UpperRequest):
+    State.upper_cutoff = req.frequency
     return {'status': 'ok'}
 
 

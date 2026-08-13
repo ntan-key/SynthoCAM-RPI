@@ -294,9 +294,7 @@ class CameraTrack(VideoStreamTrack):
 
                 now = time.monotonic()
                 if now - self._last_age_log >= 1.0:
-                    logger.info(
-                        f'frame age at recv: {age_ms:.1f} ms, capture wall ts: {captured_wall_ms:.0f}, pts = {pts}, time_base = {time_base}'
-                    )
+                    # logger.info(f'frame age at recv: {age_ms:.1f} ms, capture wall ts: {captured_wall_ms:.0f}, pts = {pts}, time_base = {time_base}')
                     self._last_age_log = now
             else:
                 data = np.zeros((CAMERA_HEIGHT, CAMERA_WIDTH, 3), dtype=np.uint8)

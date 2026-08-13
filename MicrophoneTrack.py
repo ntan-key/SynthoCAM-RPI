@@ -10,6 +10,8 @@ from aiortc import MediaStreamTrack
 from av.audio.frame import AudioFrame
 from collections import deque
 import subprocess
+import scipy
+from AudioFilter import AudioFilter
 
 import State
 
@@ -34,6 +36,8 @@ AUDIO_CHUNK = 960  # 20ms at 48kHz
 AUDIO_CHANNELS = 1
 
 logger = logging.getLogger('MicrophoneTrack')
+
+audio_filter = AudioFilter(sample_rate=48000, channels=1, volume=100, gain=1.0, notch_freq=8000, notch_freq2=15625)
 
 
 @contextlib.contextmanager
@@ -165,10 +169,11 @@ class MicrophoneTrack(MediaStreamTrack):
     def _stream_callback(self, indata, frames, time, status):
         if status:
             logger.info(f'stream status: {status}')
-        data = indata.copy().astype(np.int16).reshape(-1).tobytes()
+        # data = indata.copy().astype(np.int16).reshape(-1).tobytes()
+        data = audio_filter.process(indata.copy())
         try:
             # VERSION 1
-            self.loop.call_soon_threadsafe(self._safe_put, data)
+            self.loop.call_soon_threadsafe(self._safe_put, data.astype(np.int16).reshape(-1).tobytes())
             # VERSION 2
             # self._stream_queue.append(data)
         except asyncio.QueueFull:
@@ -219,7 +224,7 @@ class MicrophoneTrack(MediaStreamTrack):
             frame.planes[0].update(data)
             frame.pts = self.pts
             frame.time_base = fractions.Fraction(1, AUDIO_SAMPLE_RATE)
-            logger.info(f'pts = {self.pts}, time_base = {fractions.Fraction(1, AUDIO_SAMPLE_RATE)}')
+            # logger.info(f'pts = {self.pts}, time_base = {fractions.Fraction(1, AUDIO_SAMPLE_RATE)}')
             self.pts += AUDIO_CHUNK
             return frame
 

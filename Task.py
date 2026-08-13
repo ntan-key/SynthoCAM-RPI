@@ -7,6 +7,7 @@ import asyncio
 import logging
 import base64
 import State  # global variables
+import socket
 
 
 def get_capture_ls(capture_folder):
@@ -75,3 +76,17 @@ def delete_capture(path: str):
             logger.info(f'error deleting file {path}: {e}')
     else: 
         logger.info(f'error deleting file - file does not exist: {path}')
+
+
+def get_ip():
+    logger = logging.getLogger("get-ip")
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+    finally:
+        s.close()
+
+    logger.debug(f'ip address: {ip}')
+
+    return ip
