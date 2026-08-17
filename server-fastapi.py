@@ -114,25 +114,47 @@ async def capture_delete(req: CaptureDeleteRequest):
     return {'status': 'ok'}
 
 
-class LowerRequest(BaseModel):
+class AudioLowerRequest(BaseModel):
     frequency: int
 
 
 # Change lower cut off frequency of audio filter
-@app.post("/lower")
-async def lower(req: LowerRequest):
+@app.post("/audio/lower")
+async def lower(req: AudioLowerRequest):
     State.lower_cutoff = req.frequency
     return {'status': 'ok'}
 
 
-class UpperRequest(BaseModel):
+class AudioUpperRequest(BaseModel):
     frequency: int
 
 
 # Change upper cut off frequency of audio filter
-@app.post("/upper")
-async def upper(req: UpperRequest):
+@app.post("/audio/upper")
+async def upper(req: AudioUpperRequest):
     State.upper_cutoff = req.frequency
+    return {'status': 'ok'}
+
+
+class AudioGainRequest(BaseModel):
+    gain: int
+
+
+# Change gain of audio filter
+@app.post("/audio/gain")
+async def upper(req: AudioGainRequest):
+    State.gain = req.gain
+    return {'status': 'ok'}
+
+
+class AudioVolumeRequest(BaseModel):
+    volume: int
+
+
+# Change gain of audio filter
+@app.post("/audio/volume")
+async def upper(req: AudioVolumeRequest):
+    State.volume = req.volume
     return {'status': 'ok'}
 
 

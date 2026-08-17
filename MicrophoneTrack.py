@@ -37,7 +37,7 @@ AUDIO_CHANNELS = 1
 
 logger = logging.getLogger('MicrophoneTrack')
 
-audio_filter = AudioFilter(sample_rate=48000, channels=1, volume=100, gain=1.0, notch_freq=8000, notch_freq2=15625)
+audio_filter = AudioFilter(sample_rate=48000, channels=1, notch_freq=8000, notch_freq2=15625)
 
 
 @contextlib.contextmanager

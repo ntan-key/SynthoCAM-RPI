@@ -5,15 +5,14 @@ import State
 
 
 class AudioFilter:
-    def __init__(self, sample_rate=48000, channels=1, volume=100, gain=3.0, notch_freq=8000, notch_freq2=15625):
+    def __init__(self, sample_rate=48000, channels=1, notch_freq=8000, notch_freq2=15625):
         self.sample_rate = sample_rate
         self.channels = channels
-        self.volume = volume
-        self.gain = gain
         self.notch_freq = notch_freq
         self.notch_freq2 = notch_freq2
         self.sos = None
         self.zi = None
+        self.expander = None
 
 
     def build_filters(self):
@@ -34,6 +33,8 @@ class AudioFilter:
         self.sos = np.vstack([high_pass, low_pass, low_pass2, notch1, notch2])
         self.zi = np.zeros((self.sos.shape[0], 2, self.channels), dtype=np.float32)
 
+        self.expander = Expander(threshold_db=-50, ratio=4, attack_ms=3, release_ms=250, sample_rate=48000)
+
         # // Expander (soft noise gate) to reduce realatively backgound to signal noise... (WIP)
         # const compressor = audioContext.createDynamicsCompressor();
         # compressor.threshold.value = -50;
@@ -49,7 +50,37 @@ class AudioFilter:
 
         filtered, self.zi = sosfilt(self.sos, audio, axis=0, zi=self.zi)
         
-        gain = (self.volume / 100.0) * self.gain
+        gain = (State.volume / 100.0) * State.gain
         filtered *= gain
+        filtered = self.expander.process(filtered)
 
         return filtered
+
+
+class Expander:
+    def __init__(self, threshold_db=-40.0, ratio=4, attack_ms=5, release_ms=100, sample_rate=48000):
+        self.threshold_db = threshold_db
+        self.ratio = ratio
+        self.attack_coeff = np.exp(-1 / (sample_rate * attack_ms / 1000))
+        self.release_coeff = np.exp(-1 / (sample_rate * release_ms / 1000))
+        self.gain = 1
+    
+
+    def process(self, audio):
+        rms = np.sqrt(np.mean(audio ** 2) + 1e-12)
+        level_db = 20 * np.log10(rms)
+
+        if level_db >= self.threshold_db:
+            gain_db = 0.0
+        else:
+            gain_db = (level_db - self.threshold_db) * (self.ratio - 1)
+        
+        target_gain = 10 ** (gain_db / 20)
+
+        if target_gain < self.gain:
+            coeff = self.attack_coeff
+        else:
+            coeff = self.release_coeff
+
+        self.gain = ( coeff * self.gain + (1 - coeff) * target_gain)
+        return audio * self.gain
